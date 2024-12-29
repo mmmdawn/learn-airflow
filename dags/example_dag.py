@@ -41,6 +41,7 @@ While operating this DAG, there's a few things to keep in mind:
 import logging
 import datetime
 from airflow.decorators import task, dag
+from airflow.models.param import Param
 
 __dag_name__ = "example_DAG"
 __description__ = "Just an example DAG"
@@ -51,27 +52,26 @@ __tags__ = ["example"]
 
 
 @task()
-def prepare_data(from_value: int, to_value: int, **kwargs) -> list[int]:
+def prepare_data(from_value: int, to_value: int, chunk_size: int, **kwargs) -> list[int]:
     """
     Task to prepare data for processing.
 
     Args:
         from_value: Start value for data preparation.
         to_value: End value for data preparation.
+        chunk_size: Size of data chunks.
 
     Returns:
         List of batches of integers.
     """
 
     list_of_int = list(range(from_value, to_value + 1, 1))
-    # Split into 10 chunks
-    chunk_size = len(list_of_int) // 10
     chunks = [list_of_int[i:i + chunk_size] for i in range(0, len(list_of_int), chunk_size)]
 
     return chunks
 
 
-@task(queue='testing_queue')
+@task()
 def process_data(data: list[int], **kwargs) -> int:
     """
     Task to process data.
@@ -85,7 +85,7 @@ def process_data(data: list[int], **kwargs) -> int:
     return sum(data)
 
 
-@task(queue='testing_queue')
+@task()
 def aggregate_result(**kwargs) -> None:
     """
     Task to aggregate results from multiple tasks.
@@ -119,8 +119,15 @@ def aggregate_result(**kwargs) -> None:
     description=__description__,
     doc_md=__doc__,
     params={
-        "from_value": 1,
-        "to_value": 100
+        "from_value": Param(default=1,
+                            type="integer",
+                            description="Start value to calculate sum."),
+        "to_value": Param(default=100,
+                          type="integer",
+                          description="End value to calculate sum."),
+        "chunk_size": Param(default=10,
+                            type="integer",
+                            description="Size of data chunks.")
     },
     render_template_as_native_obj=True,
     schedule=__schedule__,
@@ -128,7 +135,8 @@ def aggregate_result(**kwargs) -> None:
     tags=__tags__,
 )
 def generate_dag():
-    _prepare_data = prepare_data(from_value="{{ dag_run.conf.from_value }}", to_value="{{ dag_run.conf.to_value }}")
+    _prepare_data = prepare_data(from_value="{{ dag_run.conf.from_value }}", to_value="{{ dag_run.conf.to_value }}",
+                                 chunk_size="{{ dag_run.conf.chunk_size }}")
     _process_data = process_data.expand(data=_prepare_data)
     _aggregate_result = aggregate_result()
 
