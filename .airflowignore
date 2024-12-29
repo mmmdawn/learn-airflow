@@ -1,0 +1,9 @@
+deprecated_dags/
+venv/
+.venv/
+logs/
+data/
+dev/
+plugins/
+.idea/
+__pycache__/
